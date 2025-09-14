@@ -1,0 +1,21 @@
+{
+  "name": "@jobai/shared",
+  "version": "0.0.1",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.22.4",
+    "diff-match-patch": "^1.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/diff-match-patch": "^1.0.36",
+    "typescript": "^5.3.3"
+  }
+}

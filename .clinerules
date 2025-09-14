@@ -1,0 +1,48 @@
+# Custom Commands for Job Application Platform
+
+## Command: -a
+When the user types "-a" in their message:
+1. First, read and analyze the file "whatwedid.md" to understand the current project state
+2. Review all recent changes and completed work
+3. Understand the context of what has been built so far
+4. Choose the appropriate agent/approach based on the current project needs
+5. Continue development from where we left off
+6. Always acknowledge what was previously completed before suggesting next steps
+7. add comments for every line of code
+
+## Command: -s (Summary of last action)
+When the user types "-s" in their message:
+1. Provide a detailed bullet-point summary of what was just completed in the last response
+2. List any files that were created or modified
+3. Mention any key decisions that were made
+4. Highlight any important next steps or todos
+5. Keep it brief - maximum 5-7 bullet points
+
+## Command: -ss (Super Short Summary)
+When the user types "-ss" in their message:
+1. Give a one-line summary of what was just done
+2. List only the files changed (if any)
+
+## Command: -log (Update the log with what was done)
+When the user types "-log" in their message:
+1. Automatically append what was just completed to whatwedid.md
+2. Update the "Last Updated" date
+3. Move completed items to the completed section
+4. Add any new TODOs that emerged
+5. Confirm the update was made
+
+## Command: -diff (Show what changed)
+When the user types "-diff" in their message:
+1. Show a summary of all file changes in the last action
+2. List new files created
+3. List files modified
+4. List any files deleted
+5. For modified files, briefly describe what changed
+
+## Command: -recap (Session recap)
+When the user types "-recap" in their message:
+1. Provide a comprehensive summary of the entire current session
+2. List all files created/modified during this session
+3. Summarize all major accomplishments
+4. List any unresolved issues or errors
+5. Provide clear next steps for the next session

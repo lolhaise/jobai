@@ -1,0 +1,219 @@
+# Production Docker Compose configuration
+# This file is used for self-hosted deployments
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: jobai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jobai
+      POSTGRES_USER: ${DB_USER:-jobai_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_MAX_CONNECTIONS: 200
+      POSTGRES_SHARED_BUFFERS: 256MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - jobai_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-jobai_user} -d jobai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: jobai_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - jobai_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--auth", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS API
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: jobai_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${DB_USER:-jobai_user}:${DB_PASSWORD}@postgres:5432/jobai?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://jobai.app}
+    volumes:
+      - api_uploads:/app/uploads
+      - api_logs:/app/logs
+    ports:
+      - "4000:4000"
+    networks:
+      - jobai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Next.js Web App
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NODE_ENV: production
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.jobai.app}
+    container_name: jobai_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://jobai.app}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      DATABASE_URL: postgresql://${DB_USER:-jobai_user}:${DB_PASSWORD}@postgres:5432/jobai?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.jobai.app}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://jobai.app}
+    ports:
+      - "3000:3000"
+    networks:
+      - jobai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: jobai_nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/sites-enabled:/etc/nginx/sites-enabled:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+      - nginx_logs:/var/log/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - jobai_network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Background Job Processor
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: jobai_worker
+    restart: unless-stopped
+    command: node dist/worker.js
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-jobai_user}:${DB_PASSWORD}@postgres:5432/jobai?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - worker_logs:/app/logs
+    networks:
+      - jobai_network
+
+  # Backup Service
+  backup:
+    image: postgres:15-alpine
+    container_name: jobai_backup
+    restart: "no"
+    depends_on:
+      - postgres
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: >
+      sh -c "while true; do
+        /backup.sh
+        sleep 86400
+      done"
+    networks:
+      - jobai_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  api_uploads:
+    driver: local
+  api_logs:
+    driver: local
+  worker_logs:
+    driver: local
+  nginx_cache:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  jobai_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

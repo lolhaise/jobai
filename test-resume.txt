@@ -1,0 +1,53 @@
+John Smith
+Software Engineer | Full Stack Developer
+john.smith@email.com | (555) 123-4567
+San Francisco, CA
+
+PROFESSIONAL SUMMARY
+Experienced full-stack developer with 5+ years of expertise in building scalable web applications. Proficient in React, Node.js, and cloud technologies. Passionate about creating efficient, user-friendly solutions and mentoring junior developers.
+
+PROFESSIONAL EXPERIENCE
+
+Senior Software Engineer - Tech Solutions Inc.
+San Francisco, CA | January 2021 - Present
+• Led development of microservices architecture serving 1M+ users daily
+• Reduced API response time by 40% through optimization and caching strategies
+• Mentored team of 5 junior developers, improving team productivity by 30%
+• Implemented CI/CD pipelines reducing deployment time from 2 hours to 15 minutes
+
+Full Stack Developer - Digital Innovations LLC
+San Jose, CA | June 2018 - December 2020
+• Developed React-based dashboard increasing user engagement by 50%
+• Built RESTful APIs using Node.js and Express handling 10K+ requests/minute
+• Collaborated with UX team to improve application usability scores by 35%
+• Integrated third-party payment systems processing $2M+ in transactions
+
+Junior Developer - StartupXYZ
+Palo Alto, CA | May 2017 - May 2018
+• Created responsive web applications using HTML5, CSS3, and JavaScript
+• Participated in agile development cycles and daily standup meetings
+• Fixed 100+ bugs and improved code coverage from 45% to 80%
+
+EDUCATION
+
+Bachelor of Science in Computer Science
+University of California, Berkeley
+Graduated: May 2017
+GPA: 3.8/4.0
+
+SKILLS
+Programming Languages: JavaScript, TypeScript, Python, Java, SQL
+Frameworks & Libraries: React, Node.js, Express, Next.js, Django, Spring Boot
+Databases: PostgreSQL, MongoDB, Redis, MySQL
+Cloud & DevOps: AWS, Docker, Kubernetes, Jenkins, GitHub Actions
+Tools: Git, Jira, Figma, Postman, VS Code
+
+CERTIFICATIONS
+AWS Certified Solutions Architect - Associate (2022)
+Google Cloud Professional Cloud Developer (2021)
+Certified Kubernetes Administrator (CKA) (2020)
+
+LANGUAGES
+English (Native)
+Spanish (Conversational)
+Mandarin Chinese (Basic)

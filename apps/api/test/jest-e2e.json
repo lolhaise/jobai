@@ -1,0 +1,14 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@jobai/shared": "<rootDir>/../../../packages/shared/src",
+    "^@jobai/database": "<rootDir>/../../../packages/database/src",
+    "^@jobai/job-apis": "<rootDir>/../../../packages/job-apis/src"
+  }
+}

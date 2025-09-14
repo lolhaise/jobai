@@ -1,0 +1,1016 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  name              String?
+  password          String?
+  emailVerified     DateTime?
+  image             String?
+  role              UserRole          @default(USER)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  // OAuth
+  accounts          Account[]
+  sessions          Session[]
+  
+  // Profile
+  profile           Profile?
+  
+  // Resumes
+  resumes           Resume[]
+  
+  // Applications
+  applications      Application[]
+  
+  // Job Searches
+  savedSearches     SavedSearch[]
+  jobAlerts         JobAlert[]
+  savedJobs         SavedJob[]
+  
+  // Activity
+  activities        Activity[]
+  applicationNotes  ApplicationNote[]
+  applicationDocuments ApplicationDocument[]
+  applicationActivities ApplicationActivity[]
+  
+  // Cover Letters
+  coverLetters      CoverLetter[]
+  
+  // Calendar Integration
+  calendarIntegrations CalendarIntegration[] // Connected calendar accounts
+  calendarEvents       CalendarEvent[]       // Synced calendar events
+  
+  // Performance indexes - added comments for each index purpose
+  @@index([email])           // For email-based login lookups
+  @@index([createdAt])       // For sorting users by registration date
+  @@index([role])            // For filtering by user role (admin views)
+  @@index([emailVerified])   // For filtering verified users
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model Profile {
+  id                     String              @id @default(cuid())
+  userId                 String              @unique
+  
+  // Basic Information
+  phone                  String?
+  location               String?
+  timezone               String?
+  
+  // Work Preferences
+  desiredJobTitles       String[]
+  desiredSalaryMin       Int?
+  desiredSalaryMax       Int?
+  desiredLocations       String[]
+  openToRemote           Boolean             @default(true)
+  openToHybrid           Boolean             @default(true)
+  openToOnsite           Boolean             @default(true)
+  
+  // Work Authorization
+  workAuthorization      WorkAuthorization?
+  requiresSponsorship    Boolean             @default(false)
+  securityClearance      SecurityClearance?
+  
+  // Application Defaults
+  veteranStatus          VeteranStatus?
+  disabilityStatus       DisabilityStatus?
+  gender                 String?
+  ethnicity              String[]
+  
+  // Professional Links
+  linkedinUrl            String?
+  githubUrl              String?
+  portfolioUrl           String?
+  
+  // Preferences
+  jobSearchStatus        JobSearchStatus     @default(ACTIVE)
+  availableStartDate     DateTime?
+  noticePeriod           Int?                // in days
+  
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  
+  user                   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Resume Management
+model Resume {
+  id               String            @id @default(cuid())
+  userId           String
+  
+  // Basic Info
+  title            String
+  isDefault        Boolean           @default(false)
+  version          Int               @default(1)
+  parentId         String?           // Reference to parent resume for versioning
+  
+  // File Storage
+  originalFileUrl  String?
+  originalFileName String?
+  fileFormat       FileFormat?
+  
+  // Resume Builder Support
+  templateId       String?           // Template used for resume builder
+  builderData      Json?             // Raw resume builder form data
+  
+  // Parsed Content
+  summary          String?           @db.Text
+  experience       Json[]            // Array of experience objects
+  education        Json[]            // Array of education objects
+  skills           String[]
+  certifications   Json[]            // Array of certification objects
+  languages        Json[]            // Array of language objects
+  projects         Json[]            // Array of project objects
+  
+  // ATS Optimization
+  atsScore         Float?
+  keywords         String[]
+  
+  // Tags & Search
+  tags             String[]
+  isPublic         Boolean           @default(false)
+  shareToken       String?           @unique
+  
+  // Version Control
+  versionNotes     String?
+  diff             Json?             // Diff from parent version
+  isArchived       Boolean           @default(false)
+  
+  // Metadata
+  lastUsedAt       DateTime?
+  viewCount        Int               @default(0)
+  downloadCount    Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent           Resume?           @relation("ResumeVersions", fields: [parentId], references: [id])
+  children         Resume[]          @relation("ResumeVersions")
+  applications     Application[]
+  tailoredResumes  TailoredResume[]
+  templates        ResumeTemplate[]  @relation("TemplateResumes")
+  shares           ResumeShare[]
+  coverLetters     CoverLetter[]
+  
+  // Performance indexes for resume management - added comments for each index purpose
+  @@index([userId])                 // For user's resume listing
+  @@index([userId, isDefault])      // For getting default resume
+  @@index([userId, isArchived])     // For filtering archived resumes
+  @@index([templateId])             // For filtering by template
+  @@index([tags])                   // For tag-based search
+  @@index([shareToken])             // For public share lookups
+  @@index([lastUsedAt])             // For sorting by usage
+  @@index([createdAt])              // For sorting by creation date
+}
+
+// Resume Template System
+model ResumeTemplate {
+  id               String            @id @default(cuid())
+  
+  // Template Info
+  name             String
+  description      String?
+  category         String            // Professional, Creative, Technical, etc.
+  thumbnail        String?
+  
+  // Template Data
+  layout           Json              // Layout configuration
+  styles           Json              // Style configuration
+  sections         String[]          // Available sections
+  
+  // Usage
+  isPublic         Boolean           @default(true)
+  isPremium        Boolean           @default(false)
+  usageCount       Int               @default(0)
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  resumes          Resume[]          @relation("TemplateResumes")
+  
+  @@index([category])
+  @@index([isPublic])
+}
+
+// Resume Sharing
+model ResumeShare {
+  id               String            @id @default(cuid())
+  resumeId         String
+  
+  // Share Settings
+  shareType        ShareType         @default(LINK)
+  expiresAt        DateTime?
+  password         String?
+  
+  // Access Control
+  allowDownload    Boolean           @default(false)
+  allowCopy        Boolean           @default(false)
+  requireEmail     Boolean           @default(false)
+  
+  // Tracking
+  viewCount        Int               @default(0)
+  lastViewedAt     DateTime?
+  accessLog        Json[]            // Array of access events
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  resume           Resume            @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  
+  @@index([resumeId])
+}
+
+model TailoredResume {
+  id                String        @id @default(cuid())
+  resumeId          String
+  jobId             String
+  applicationId     String?       @unique
+  
+  // Tailored Content
+  tailoredSummary   String?       @db.Text
+  tailoredExperience Json[]       // Modified experience bullets
+  emphasizedSkills  String[]
+  addedKeywords     String[]
+  
+  // AI Metadata
+  aiModel           String?
+  promptTokens      Int?
+  completionTokens  Int?
+  totalCost         Float?
+  
+  // Quality Scores
+  atsScore          Float?
+  relevanceScore    Float?
+  
+  // User Approval
+  approved          Boolean       @default(false)
+  userEdits         Json?         // Track manual edits
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  resume            Resume        @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  job               Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  application       Application?  @relation(fields: [applicationId], references: [id])
+  coverLetter       CoverLetter?
+  
+  @@index([resumeId, jobId])
+}
+
+model CoverLetter {
+  id                String          @id @default(cuid())
+  userId            String
+  resumeId          String
+  jobId             String
+  tailoredResumeId  String?         @unique
+  
+  // Content
+  content           String          @db.Text
+  tone              CoverLetterTone @default(PROFESSIONAL)
+  metadata          Json?           // length, template, qualityScore, etc.
+  
+  // AI Metadata
+  aiModel           String?
+  promptTokens      Int?
+  completionTokens  Int?
+  totalCost         Float?
+  
+  // User Approval
+  approved          Boolean         @default(false)
+  userEdits         Json?           // Track manual edits
+  
+  // Versioning
+  version           Int             @default(1)
+  parentId          String?         // For tracking versions
+  
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume            Resume          @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  job               Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tailoredResume    TailoredResume? @relation(fields: [tailoredResumeId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([resumeId])
+  @@index([jobId])
+}
+
+// Job Management
+model Job {
+  id                String            @id @default(cuid())
+  
+  // Basic Information
+  title             String
+  company           String
+  location          String?
+  remoteType        RemoteType        @default(ONSITE)
+  
+  // Job Details
+  description       String            @db.Text
+  requirements      String[]
+  responsibilities  String[]
+  
+  // Compensation
+  salaryMin         Int?
+  salaryMax         Int?
+  salaryCurrency    String            @default("USD")
+  salaryPeriod      SalaryPeriod      @default(YEARLY)
+  
+  // Source Information
+  sourceApi         String            // Which API it came from
+  sourceId          String            // ID from the source API
+  sourceUrl         String            // Direct link to apply
+  
+  // Categorization
+  category          String?
+  level             ExperienceLevel?
+  employmentType    EmploymentType    @default(FULL_TIME)
+  
+  // Company Info
+  companyLogo       String?
+  companySize       String?
+  companyIndustry   String?
+  
+  // Metadata
+  postedAt          DateTime?
+  expiresAt         DateTime?
+  isActive          Boolean           @default(true)
+  
+  // Deduplication
+  dedupeHash        String?           @unique
+  duplicateOf       String?           // Reference to primary job if duplicate
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  applications      Application[]
+  tailoredResumes   TailoredResume[]
+  savedBy           SavedJob[]
+  savedSearchMatches JobMatch[]
+  coverLetters      CoverLetter[]
+  
+  // Performance indexes for job searches - added comments for each index purpose
+  @@index([sourceApi, sourceId])    // For finding jobs from specific sources
+  @@index([dedupeHash])             // For deduplication queries
+  @@index([title, company])         // For searching by title and company
+  @@index([location])               // For location-based searches
+  @@index([remoteType])             // For filtering by remote/hybrid/onsite
+  @@index([postedAt])               // For sorting by posting date
+  @@index([salaryMin, salaryMax])   // For salary range filtering
+  @@index([employmentType])         // For filtering by employment type
+  @@index([level])                  // For experience level filtering
+  @@index([isActive])               // For filtering active jobs
+  @@index([category])               // For category filtering
+}
+
+// Saved Jobs
+model SavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  notes     String?
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, jobId])
+  @@index([userId])
+}
+
+// Application Tracking
+model Application {
+  id               String              @id @default(cuid())
+  userId           String
+  jobId            String
+  resumeId         String
+  
+  // Status Tracking
+  status           ApplicationStatus   @default(DRAFT)
+  stage            ApplicationStage    @default(NOT_APPLIED)
+  priority         ApplicationPriority @default(MEDIUM)
+  
+  // Application Details
+  appliedAt        DateTime?
+  applicationUrl   String?
+  referenceNumber  String?
+  source           String?             // Where did you apply (LinkedIn, company website, etc.)
+  contactPerson    String?             // Recruiter or contact name
+  contactEmail     String?             // Contact email
+  
+  // Timeline
+  responseDeadline DateTime?           // When you expect to hear back
+  interviewDate    DateTime?           // Next interview date
+  startDate        DateTime?           // Expected start date
+  
+  // Salary Information
+  salaryExpectation Int?               // Your expected salary
+  salaryOffered     Int?               // Offered salary
+  salaryNegotiated  Int?               // Final negotiated salary
+  
+  // Cover Letter
+  coverLetter      String?             @db.Text
+  
+  // Interview Tracking
+  interviews       Interview[]
+  
+  // Follow-up
+  lastFollowUp     DateTime?
+  nextFollowUp     DateTime?
+  
+  // Notes
+  notes            String?             @db.Text
+  
+  // Outcome
+  rejectedAt       DateTime?
+  rejectionReason  String?
+  offeredAt        DateTime?
+  offerSalary      Int?
+  offerAccepted    Boolean?
+  withdrawnAt      DateTime?
+  withdrawnReason  String?
+  
+  // Metadata
+  color            String?             // Color for Kanban card
+  position         Int?                // Position in Kanban column
+  isArchived       Boolean             @default(false)
+  isFavorite       Boolean             @default(false)
+  
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job              Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume           Resume              @relation(fields: [resumeId], references: [id])
+  tailoredResume   TailoredResume?
+  activities       Activity[]
+  applicationNotes ApplicationNote[]
+  tags             ApplicationTag[]
+  documents        ApplicationDocument[]
+  activityLogs     ApplicationActivity[]
+  
+  @@unique([userId, jobId])
+  // Performance indexes for application tracking - added comments for each index purpose
+  @@index([userId, status])         // For user dashboard filtering by status
+  @@index([userId, stage])          // For user dashboard filtering by stage
+  @@index([userId, priority])       // For sorting by priority
+  @@index([status, stage])          // For combined status/stage queries
+  @@index([appliedAt])              // For sorting by application date
+  @@index([interviewDate])          // For upcoming interviews
+  @@index([responseDeadline])       // For follow-up reminders
+  @@index([userId, isArchived])     // For showing/hiding archived apps
+  @@index([userId, isFavorite])     // For favorite applications
+}
+
+model Interview {
+  id              String          @id @default(cuid())
+  applicationId   String
+  
+  // Interview Details
+  type            InterviewType
+  scheduledAt     DateTime
+  duration        Int?            // in minutes
+  location        String?
+  meetingUrl      String?
+  
+  // Interviewers
+  interviewers    String[]
+  
+  // Preparation
+  notes           String?         @db.Text
+  questions       String[]
+  
+  // Outcome
+  completed       Boolean         @default(false)
+  feedback        String?         @db.Text
+  result          InterviewResult?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  application     Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@index([applicationId])
+}
+
+// Search and Alerts
+model SavedSearch {
+  id              String          @id @default(cuid())
+  userId          String
+  
+  // Search Criteria
+  name            String
+  keywords        String?
+  jobTitles       String[]
+  companies       String[]
+  locations       String[]
+  remoteOnly      Boolean         @default(false)
+  salaryMin       Int?
+  categories      String[]
+  experienceLevels ExperienceLevel[]
+  
+  // Settings
+  isActive        Boolean         @default(true)
+  emailAlerts     Boolean         @default(false)
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  lastRunAt       DateTime?
+  
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matches         JobMatch[]
+  alerts          JobAlert[]
+  
+  @@index([userId])
+}
+
+model JobMatch {
+  id              String          @id @default(cuid())
+  savedSearchId   String
+  jobId           String
+  
+  // Match Quality
+  matchScore      Float
+  matchReasons    String[]
+  
+  // User Interaction
+  viewed          Boolean         @default(false)
+  dismissed       Boolean         @default(false)
+  
+  createdAt       DateTime        @default(now())
+  
+  savedSearch     SavedSearch     @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  job             Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  @@unique([savedSearchId, jobId])
+  @@index([savedSearchId, viewed])
+}
+
+model JobAlert {
+  id              String          @id @default(cuid())
+  userId          String
+  savedSearchId   String?
+  
+  // Alert Settings
+  frequency       AlertFrequency  @default(DAILY)
+  isActive        Boolean         @default(true)
+  
+  // Delivery
+  lastSentAt      DateTime?
+  nextSendAt      DateTime?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedSearch     SavedSearch?    @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// Activity Tracking
+model Activity {
+  id              String          @id @default(cuid())
+  userId          String
+  applicationId   String?
+  
+  // Activity Details
+  type            ActivityType
+  description     String
+  metadata        Json?
+  
+  createdAt       DateTime        @default(now())
+  
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application     Application?    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([applicationId])
+}
+
+// API Integration Management
+model ApiKey {
+  id              String          @id @default(cuid())
+  
+  // Provider Information
+  provider        String          // remoteok, remotive, themuse, etc.
+  keyType         String          // bearer, apikey, basic, custom
+  
+  // Encrypted Key Data
+  hashedKey       String          // bcrypt hashed API key
+  secret          String?         // encrypted secret/password if needed
+  
+  // Configuration
+  endpoint        String?         // custom endpoint if needed
+  rateLimits      String?         // JSON string of rate limit config
+  metadata        String?         // JSON string of additional metadata
+  
+  // Lifecycle
+  expiresAt       DateTime?
+  isActive        Boolean         @default(true)
+  lastUsedAt      DateTime?
+  usageCount      Int             @default(0)
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@unique([provider, isActive]) // Only one active key per provider
+  @@index([provider])
+  @@index([expiresAt])
+}
+
+model CalendarIntegration {
+  id              String          @id @default(cuid())
+  userId          String
+  provider        String          // GOOGLE, OUTLOOK, etc.
+  
+  // OAuth Tokens with comments for each field
+  accessToken     String          @db.Text // OAuth access token for API calls
+  refreshToken    String          @db.Text // OAuth refresh token for renewing access
+  expiresAt       DateTime?       // Token expiration timestamp
+  
+  // Integration Status with comments
+  isActive        Boolean         @default(true) // Whether integration is currently active
+  lastSyncedAt    DateTime?       // Last successful sync timestamp
+  syncEnabled     Boolean         @default(true) // Auto-sync enabled flag
+  
+  // Account Info with comments
+  email           String?         // Connected account email address
+  calendarId      String?         // Primary calendar identifier
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events          CalendarEvent[]
+  
+  @@unique([userId, provider])
+  @@index([userId, isActive])
+}
+
+model CalendarEvent {
+  id              String          @id @default(cuid())
+  userId          String
+  integrationId   String?
+  
+  // External References with comments
+  externalId      String          // Event ID from external calendar provider
+  provider        String          // Calendar provider (GOOGLE, OUTLOOK)
+  
+  // Event Details with comments  
+  title           String          // Event title/summary
+  description     String?         @db.Text // Event description
+  location        String?         // Event location
+  startTime       DateTime        // Event start time
+  endTime         DateTime        // Event end time
+  timezone        String          @default("America/New_York") // Event timezone
+  isAllDay        Boolean         @default(false) // All-day event flag
+  
+  // Meeting Details with comments
+  meetingUrl      String?         // Virtual meeting URL if applicable
+  attendees       Json?           // Array of attendee email addresses
+  organizer       String?         // Event organizer email
+  
+  // Status with comments
+  status          String?         // Event status (confirmed, tentative, cancelled)
+  isBusy          Boolean         @default(true) // Whether event blocks time
+  
+  // Metadata with comments
+  metadata        Json?           // Provider-specific additional data
+  lastSyncedAt    DateTime        @default(now()) // Last sync timestamp
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration     CalendarIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  
+  @@unique([externalId, provider])
+  @@index([userId, startTime])
+  @@index([userId, provider])
+}
+
+
+// Enums
+enum UserRole {
+  USER
+  PREMIUM
+  ADMIN
+}
+
+enum WorkAuthorization {
+  CITIZEN
+  PERMANENT_RESIDENT
+  WORK_VISA
+  STUDENT_VISA
+  OTHER
+}
+
+enum SecurityClearance {
+  NONE
+  PUBLIC_TRUST
+  SECRET
+  TOP_SECRET
+  TS_SCI
+}
+
+enum VeteranStatus {
+  NOT_VETERAN
+  VETERAN
+  PROTECTED_VETERAN
+  PREFER_NOT_TO_SAY
+}
+
+enum DisabilityStatus {
+  NO
+  YES
+  PREFER_NOT_TO_SAY
+}
+
+enum JobSearchStatus {
+  ACTIVE
+  PASSIVE
+  NOT_LOOKING
+  URGENT
+}
+
+enum FileFormat {
+  PDF
+  DOCX
+  DOC
+  TXT
+}
+
+enum RemoteType {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum ExperienceLevel {
+  INTERN
+  ENTRY
+  MID
+  SENIOR
+  LEAD
+  EXECUTIVE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  FREELANCE
+  INTERNSHIP
+}
+
+enum SalaryPeriod {
+  HOURLY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum ApplicationStatus {
+  DRAFT
+  APPLIED
+  IN_PROGRESS
+  REJECTED
+  OFFERED
+  ACCEPTED
+  WITHDRAWN
+}
+
+enum ApplicationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ApplicationStage {
+  NOT_APPLIED
+  APPLIED
+  SCREENING
+  PHONE_SCREEN
+  TECHNICAL
+  ONSITE
+  FINAL
+  OFFER
+  NEGOTIATION
+  CLOSED
+}
+
+enum InterviewType {
+  PHONE
+  VIDEO
+  ONSITE
+  TECHNICAL
+  BEHAVIORAL
+  PANEL
+  FINAL
+}
+
+enum InterviewResult {
+  PASS
+  FAIL
+  PENDING
+  CANCELLED
+}
+
+enum AlertFrequency {
+  INSTANT
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ActivityType {
+  APPLICATION_CREATED
+  APPLICATION_SUBMITTED
+  APPLICATION_UPDATED
+  APPLICATION_REJECTED
+  INTERVIEW_SCHEDULED
+  INTERVIEW_COMPLETED
+  OFFER_RECEIVED
+  RESUME_UPLOADED
+  RESUME_TAILORED
+  JOB_SAVED
+  JOB_VIEWED
+  NOTE_ADDED
+  TAG_ADDED
+  DOCUMENT_UPLOADED
+  STATUS_CHANGED
+  FOLLOW_UP_SCHEDULED
+}
+
+enum DocumentType {
+  RESUME
+  COVER_LETTER
+  PORTFOLIO
+  TRANSCRIPT
+  CERTIFICATE
+  REFERENCE
+  OTHER
+}
+
+enum CoverLetterTone {
+  PROFESSIONAL
+  ENTHUSIASTIC
+  CREATIVE
+  FORMAL
+  CASUAL
+}
+
+enum ShareType {
+  LINK
+  EMAIL
+  EMBED
+}
+
+enum ApiKeyType {
+  BEARER
+  API_KEY
+  BASIC
+  CUSTOM
+}
+
+// Application Note Model
+model ApplicationNote {
+  id            String      @id @default(cuid())
+  applicationId String
+  userId        String
+  
+  // Note Content
+  title         String?
+  content       String      @db.Text
+  isPrivate     Boolean     @default(true)
+  isPinned      Boolean     @default(false)
+  
+  // Metadata
+  color         String?     // Note color for organization
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([applicationId])
+  @@index([userId])
+}
+
+// Application Tag Model  
+model ApplicationTag {
+  id            String      @id @default(cuid())
+  applicationId String
+  
+  // Tag Details
+  name          String
+  color         String      @default("#6B7280")
+  description   String?
+  
+  createdAt     DateTime    @default(now())
+  
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  @@unique([applicationId, name])
+  @@index([applicationId])
+  @@index([name])
+}
+
+// Application Document Model
+model ApplicationDocument {
+  id            String       @id @default(cuid())
+  applicationId String
+  userId        String
+  
+  // File Details
+  fileName      String
+  originalName  String
+  fileUrl       String
+  fileSize      Int          // in bytes
+  mimeType      String
+  documentType  DocumentType @default(OTHER)
+  
+  // Metadata
+  title         String?
+  description   String?
+  isPublic      Boolean      @default(false)
+  uploadedAt    DateTime     @default(now())
+  
+  createdAt     DateTime     @default(now())
+  
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([applicationId])
+  @@index([userId])
+  @@index([documentType])
+}
+
+// Application Activity Log Model
+model ApplicationActivity {
+  id            String       @id @default(cuid())
+  applicationId String
+  userId        String
+  
+  // Activity Details
+  action        String       // What happened
+  description   String?      // Detailed description
+  metadata      Json?        // Additional data
+  
+  // Timeline
+  occurredAt    DateTime     @default(now())
+  
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([applicationId, occurredAt])
+  @@index([userId])
+}
